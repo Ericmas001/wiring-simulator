@@ -347,14 +347,94 @@
     function updateNextId(str) { const num = parseInt(str.replace(/\D/g, '')); if(!isNaN(num) && num >= STATE.nextId) STATE.nextId = num + 1; }
 
     // --- UI & LOGIC ---
-    window.togglePanel = function() { document.getElementById('code-panel').classList.toggle('collapsed'); if(!document.getElementById('code-panel').classList.contains('collapsed')) exportState(); };
-    window.setTool = function(t) { STATE.tool = t; STATE.pendingCableStart = null; document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); if(t==='select') document.getElementById('btn-select').classList.add('active'); if(t.startsWith('14')) document.getElementById('btn-'+t.replace('/','-')).classList.add('active'); renderWorkspace(); };
-    window.addComp = function(type) { const id = 'c' + STATE.nextId++; STATE.components.push({ id, type, x: 100, y: 100 + (STATE.components.length * 40), state: false, powered: false }); renderWorkspace(); };
-    window.removeComp = function(id) { if(!confirm('Delete component?')) return; STATE.cables = STATE.cables.filter(c => { if(c.from === id || c.to === id) { STATE.connections = STATE.connections.filter(conn => !conn.source.startsWith(c.id) && !conn.target.startsWith(c.id)); return false; } return true; }); STATE.nuts = STATE.nuts.filter(n => n.compId !== id); const termPrefix = `${id}:term:`; STATE.connections = STATE.connections.filter(conn => !conn.source.startsWith(termPrefix) && !conn.target.startsWith(termPrefix)); STATE.components = STATE.components.filter(c => c.id !== id); renderWorkspace(); };
-    window.handleWsClick = function(e, id) { if(e.target.closest('button') || e.target.classList.contains('btn-delete')) return; if(STATE.tool === 'select') return; if(STATE.tool.startsWith('14')) { if(!STATE.pendingCableStart) { STATE.pendingCableStart = id; renderWorkspace(); } else if(STATE.pendingCableStart !== id) { const cid = 'cab-' + STATE.nextId++; STATE.cables.push({ id: cid, from: STATE.pendingCableStart, to: id, type: STATE.tool, meta: { srcPos: {x: 20, y: 20}, dstPos: {x: 20, y: 300} } }); STATE.pendingCableStart = null; setTool('select'); } } };
-    window.startWsDrag = function(e, id) { if(e.target.closest('button') || e.target.classList.contains('btn-delete')) return; if(STATE.tool !== 'select') return; STATE.dragComp = id; STATE.isDragging = false; const c = STATE.components.find(x => x.id === id); if(c) STATE.dragOffset = { x: e.clientX - c.x, y: e.clientY - c.y }; };
-    window.handleWsMove = function(e) { if(STATE.dragComp) { STATE.isDragging = true; const c = STATE.components.find(x => x.id === STATE.dragComp); if(c) { c.x = e.clientX - STATE.dragOffset.x; c.y = e.clientY - STATE.dragOffset.y; const el = document.getElementById('comp-'+c.id); if(el) { el.style.left = c.x + 'px'; el.style.top = c.y + 'px'; } renderCables(); } } };
-    window.handleWsUp = function(e) { if(STATE.dragComp && STATE.isDragging) { STATE.dragComp = null; renderWorkspace(); } else { STATE.dragComp = null; } };
+    window.togglePanel = function() {
+        const panel = document.getElementById('code-panel');
+        panel.classList.toggle('collapsed');
+        if (!panel.classList.contains('collapsed')) {
+            exportState();
+        }
+    };
+    window.setTool = function(t) {
+        STATE.tool = t;
+        STATE.pendingCableStart = null;
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        if (t === 'select') {
+            document.getElementById('btn-select').classList.add('active');
+        } else if (t.startsWith('14')) {
+            document.getElementById('btn-' + t.replace('/', '-')).classList.add('active');
+        }
+        renderWorkspace();
+    };
+    window.addComp = function(type) {
+        const id = 'c' + STATE.nextId++;
+        STATE.components.push({ id, type, x: 100, y: 100 + (STATE.components.length * 40), state: false, powered: false });
+        renderWorkspace();
+    };
+    window.removeComp = function(id) {
+        if (!confirm('Delete component?')) return;
+        // Remove cables connected to the component and their associated connections
+        STATE.cables = STATE.cables.filter(c => {
+            if (c.from === id || c.to === id) {
+                STATE.connections = STATE.connections.filter(conn => !conn.source.startsWith(c.id) && !conn.target.startsWith(c.id));
+                return false;
+            }
+            return true;
+        });
+        // Remove nuts within the component
+        STATE.nuts = STATE.nuts.filter(n => n.compId !== id);
+        // Remove connections to the component's terminals
+        const termPrefix = `${id}:term:`;
+        STATE.connections = STATE.connections.filter(conn => !conn.source.startsWith(termPrefix) && !conn.target.startsWith(termPrefix));
+        // Remove the component itself
+        STATE.components = STATE.components.filter(c => c.id !== id);
+        renderWorkspace();
+    };
+    window.handleWsClick = function(e, id) {
+        if (e.target.closest('button') || e.target.classList.contains('btn-delete')) return;
+        if (STATE.tool === 'select') return;
+        if (STATE.tool.startsWith('14')) {
+            if (!STATE.pendingCableStart) {
+                STATE.pendingCableStart = id;
+                renderWorkspace();
+            } else if (STATE.pendingCableStart !== id) {
+                const cid = 'cab-' + STATE.nextId++;
+                STATE.cables.push({ id: cid, from: STATE.pendingCableStart, to: id, type: STATE.tool, meta: { srcPos: {x: 20, y: 20}, dstPos: {x: 20, y: 300} } });
+                STATE.pendingCableStart = null;
+                setTool('select');
+            }
+        }
+    };
+    window.startWsDrag = function(e, id) {
+        if (e.target.closest('button') || e.target.classList.contains('btn-delete')) return;
+        if (STATE.tool !== 'select') return;
+        STATE.dragComp = id;
+        STATE.isDragging = false;
+        const c = STATE.components.find(x => x.id === id);
+        if (c) {
+            STATE.dragOffset = { x: e.clientX - c.x, y: e.clientY - c.y };
+        }
+    };
+    window.handleWsMove = function(e) {
+        if (!STATE.dragComp) return;
+        STATE.isDragging = true;
+        const c = STATE.components.find(x => x.id === STATE.dragComp);
+        if (c) {
+            c.x = e.clientX - STATE.dragOffset.x;
+            c.y = e.clientY - STATE.dragOffset.y;
+            const el = document.getElementById('comp-' + c.id);
+            if (el) {
+                el.style.left = c.x + 'px';
+                el.style.top = c.y + 'px';
+            }
+            renderCables();
+        }
+    };
+    window.handleWsUp = function(e) {
+        if (STATE.dragComp && STATE.isDragging) {
+            renderWorkspace();
+        }
+        STATE.dragComp = null;
+    };
 
     function renderWorkspace() { try { simulate(); } catch(e) { console.error(e); } const ws = document.getElementById('workspace'); document.querySelectorAll('.component').forEach(e => e.remove()); STATE.components.forEach(c => { const el = document.createElement('div'); el.className = 'component'; el.id = 'comp-' + c.id; el.style.left = c.x + 'px'; el.style.top = c.y + 'px'; if(STATE.pendingCableStart === c.id) el.classList.add('highlight'); el.innerHTML = `<div class="comp-header"><span>${c.id.toUpperCase()}</span><span class="btn-delete" onmousedown="event.stopPropagation()" onclick="event.stopPropagation(); window.removeComp('${c.id}')">✕</span></div><div class="comp-icon">${getIcon(c)}</div><div style="text-align:center; font-size:11px; color:#64748b">${c.type}</div><div class="comp-controls">${getControls(c)}<button class="comp-btn" onmousedown="event.stopPropagation()" onclick="event.stopPropagation(); window.openModal('${c.id}')">Wire 🔌</button></div><div class="status-led ${c.powered ? 'on' : ''}"></div>`; el.onmousedown = (e) => window.startWsDrag(e, c.id); el.onclick = (e) => window.handleWsClick(e, c.id); ws.appendChild(el); }); renderCables(); }
     
@@ -382,12 +462,41 @@
     }
 
     function getIcon(c) { if(c.type === 'bulb') return c.powered ? '💡' : '⚫'; if(c.type.startsWith('switch')) return '⇅'; if(c.type === 'breaker') return '⚡'; return '🔌'; }
-    function getControls(c) { if(c.type === 'breaker' || c.type.startsWith('switch')) { return `<button class="comp-btn ${c.state ? 'active' : ''}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation(); window.toggleComp('${c.id}')">${c.state ? 'ON' : 'OFF'}</button>`; } return ''; }
+    function getControls(c) {
+        if (c.type === 'breaker' || c.type.startsWith('switch')) {
+            return `<button class="comp-btn ${c.state ? 'active' : ''}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation(); window.toggleComp('${c.id}')">${c.state ? 'ON' : 'OFF'}</button>`;
+        }
+        return '';
+    }
     
-    window.toggleComp = function(id) { const c = STATE.components.find(x => x.id === id); if(c) { c.state = !c.state; if(STATE.activeCompId) { simulate(); renderModal(); } renderWorkspace(); } };
-    window.openModal = function(id) { STATE.activeCompId = id; document.getElementById('modal').style.display = 'flex'; renderModal(); };
-    window.closeModal = function() { document.getElementById('modal').style.display = 'none'; STATE.activeCompId = null; STATE.selectedNode = null; renderWorkspace(); };
-    window.addNut = function() { const rx = 280 + (Math.random() * 40 - 20); const ry = 50 + (Math.random() * 40 - 20); STATE.nuts.push({ id: STATE.nextId++, compId: STATE.activeCompId, x: rx, y: ry }); renderModal(); };
+    window.toggleComp = function(id) {
+        const c = STATE.components.find(x => x.id === id);
+        if (c) {
+            c.state = !c.state;
+            if (STATE.activeCompId) {
+                simulate();
+                renderModal();
+            }
+            renderWorkspace();
+        }
+    };
+    window.openModal = function(id) {
+        STATE.activeCompId = id;
+        document.getElementById('modal').style.display = 'flex';
+        renderModal();
+    };
+    window.closeModal = function() {
+        document.getElementById('modal').style.display = 'none';
+        STATE.activeCompId = null;
+        STATE.selectedNode = null;
+        renderWorkspace();
+    };
+    window.addNut = function() {
+        const rx = 280 + (Math.random() * 40 - 20);
+        const ry = 50 + (Math.random() * 40 - 20);
+        STATE.nuts.push({ id: STATE.nextId++, compId: STATE.activeCompId, x: rx, y: ry });
+        renderModal();
+    };
     window.exportState = exportState; window.importState = importState;
 
     function renderModal() {
@@ -413,16 +522,181 @@
         setTimeout(drawAllConnections, 0);
     }
 
-    function handleWiringClick(e, id) { e.stopPropagation(); if(STATE.hasDraggedModal) return; if(!STATE.selectedNode) { STATE.selectedNode = id; } else if(STATE.selectedNode === id) { STATE.selectedNode = null; } else { const source = STATE.selectedNode; const target = id; if(source === target) return; const existingIdx = STATE.connections.findIndex(c => (c.source === source && c.target === target) || (c.source === target && c.target === source)); if(existingIdx > -1) { STATE.connections.splice(existingIdx, 1); } else { STATE.connections.push({ source, target }); } STATE.selectedNode = null; } renderModal(); }
-    function startModalDrag(e, type, id, isSrc) { const r = e.target.closest('.dynamic-item').getBoundingClientRect(); STATE.dragItem = { type, id, isSrc, offsetX: e.clientX - r.left, offsetY: e.clientY - r.top }; STATE.hasDraggedModal = false; }
-    function handleModalDrag(e) { if(!STATE.dragItem) return; STATE.hasDraggedModal = true; const r = document.getElementById('editor-canvas').getBoundingClientRect(); const x = e.clientX - r.left - STATE.dragItem.offsetX; const y = e.clientY - r.top - STATE.dragItem.offsetY; const { type, id, isSrc } = STATE.dragItem; if(type === 'cable') { const c = STATE.cables.find(x => x.id === id); if(c) { if(isSrc) c.meta.srcPos = {x,y}; else c.meta.dstPos = {x,y}; } } else if(type === 'nut') { const n = STATE.nuts.find(x => x.id === id); if(n) { n.x = x; n.y = y; } } renderModal(); }
-    function endModalDrag() { STATE.dragItem = null; setTimeout(() => { STATE.hasDraggedModal = false; }, 50); }
-    function drawAllConnections() { STATE.connections.forEach((conn, idx) => { const el1 = document.querySelector(`[data-id="${conn.source}"]`); const el2 = document.querySelector(`[data-id="${conn.target}"]`); if(el1 && el2) drawLine(el1, el2, idx, conn.source); }); }
-    function drawLine(el1, el2, idx, srcId) { const svg = document.getElementById('connections-layer'); const r = document.getElementById('editor-canvas').getBoundingClientRect(); const r1 = el1.getBoundingClientRect(); const r2 = el2.getBoundingClientRect(); if(r1.width===0 || r2.width===0) return; const x1 = r1.left + r1.width/2 - r.left; const y1 = r1.top + r1.height/2 - r.top; const x2 = r2.left + r2.width/2 - r.left; const y2 = r2.top + r2.height/2 - r.top; let colorClass = 'path-nut'; const idStr = el1.dataset.id + el2.dataset.id; if(idStr.includes('_b')) colorClass = 'path-b'; else if(idStr.includes('_w')) colorClass = 'path-w'; else if(idStr.includes('_r')) colorClass = 'path-r'; else if(idStr.includes('_g')) colorClass = 'path-g'; if(STATE.simHot.has(srcId)) colorClass += ' path-hot'; else if(STATE.simNeu.has(srcId)) colorClass += ' path-neu'; const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); const d = `M ${x1} ${y1} Q ${(x1+x2)/2} ${Math.min(y1,y2)-40} ${x2} ${y2}`; path.setAttribute('d', d); path.setAttribute('class', colorClass); path.oncontextmenu = (e) => { e.preventDefault(); removeConnection(idx); }; svg.appendChild(path); }
+    function handleWiringClick(e, id) {
+        e.stopPropagation();
+        if (STATE.hasDraggedModal) return;
 
-    function simulate() { STATE.components.forEach(c => c.powered = false); STATE.simHot.clear(); STATE.simNeu.clear(); const breakers = STATE.components.filter(c => c.type === 'breaker' && c.state); breakers.forEach(b => { b.powered = true; traceNode(`${b.id}:term:hot`, STATE.simHot); traceNode(`${b.id}:term:neutral`, STATE.simNeu); }); STATE.components.forEach(c => { if(c.type === 'bulb') { if(hasPower(c.id, 'hot', STATE.simHot) && hasPower(c.id, 'neutral', STATE.simNeu)) c.powered = true; } else if(c.type === 'outlet') { const h = hasPower(c.id, 'h1', STATE.simHot) || hasPower(c.id, 'h2', STATE.simHot); const n = hasPower(c.id, 'n1', STATE.simNeu) || hasPower(c.id, 'n2', STATE.simNeu); if(h && n) c.powered = true; } else if(c.type.startsWith('switch')) { const def = COMP_DEFS[c.type]; if(def.terminals.some(t => hasPower(c.id, t.id, STATE.simHot))) c.powered = true; } }); }
+        if (!STATE.selectedNode) {
+            STATE.selectedNode = id;
+        } else if (STATE.selectedNode === id) {
+            STATE.selectedNode = null;
+        } else {
+            const source = STATE.selectedNode;
+            const target = id;
+            if (source === target) return;
+
+            const existingIdx = STATE.connections.findIndex(c => (c.source === source && c.target === target) || (c.source === target && c.target === source));
+            if (existingIdx > -1) {
+                STATE.connections.splice(existingIdx, 1);
+            } else {
+                STATE.connections.push({ source, target });
+            }
+            STATE.selectedNode = null;
+        }
+        renderModal();
+    }
+    function startModalDrag(e, type, id, isSrc) {
+        const r = e.target.closest('.dynamic-item').getBoundingClientRect();
+        STATE.dragItem = { type, id, isSrc, offsetX: e.clientX - r.left, offsetY: e.clientY - r.top };
+        STATE.hasDraggedModal = false;
+    }
+    function handleModalDrag(e) {
+        if (!STATE.dragItem) return;
+        STATE.hasDraggedModal = true;
+        const r = document.getElementById('editor-canvas').getBoundingClientRect();
+        const x = e.clientX - r.left - STATE.dragItem.offsetX;
+        const y = e.clientY - r.top - STATE.dragItem.offsetY;
+        const { type, id, isSrc } = STATE.dragItem;
+        if (type === 'cable') {
+            const c = STATE.cables.find(x => x.id === id);
+            if (c) {
+                if (isSrc) c.meta.srcPos = {x,y}; else c.meta.dstPos = {x,y};
+            }
+        } else if (type === 'nut') {
+            const n = STATE.nuts.find(x => x.id === id);
+            if (n) { n.x = x; n.y = y; }
+        }
+        renderModal();
+    }
+    function endModalDrag() {
+        STATE.dragItem = null;
+        setTimeout(() => { STATE.hasDraggedModal = false; }, 50);
+    }
+    function drawAllConnections() {
+        STATE.connections.forEach((conn, idx) => {
+            const el1 = document.querySelector(`[data-id="${conn.source}"]`);
+            const el2 = document.querySelector(`[data-id="${conn.target}"]`);
+            if (el1 && el2) {
+                drawLine(el1, el2, idx, conn.source);
+            }
+        });
+    }
+    function drawLine(el1, el2, idx, srcId) {
+        const svg = document.getElementById('connections-layer');
+        const r = document.getElementById('editor-canvas').getBoundingClientRect();
+        const r1 = el1.getBoundingClientRect();
+        const r2 = el2.getBoundingClientRect();
+        if (r1.width === 0 || r2.width === 0) return;
+
+        const x1 = r1.left + r1.width / 2 - r.left;
+        const y1 = r1.top + r1.height / 2 - r.top;
+        const x2 = r2.left + r2.width / 2 - r.left;
+        const y2 = r2.top + r2.height / 2 - r.top;
+
+        let colorClass = 'path-nut';
+        const idStr = el1.dataset.id + el2.dataset.id;
+        if (idStr.includes('_b')) colorClass = 'path-b';
+        else if (idStr.includes('_w')) colorClass = 'path-w';
+        else if (idStr.includes('_r')) colorClass = 'path-r';
+        else if (idStr.includes('_g')) colorClass = 'path-g';
+
+        if (STATE.simHot.has(srcId)) colorClass += ' path-hot';
+        else if (STATE.simNeu.has(srcId)) colorClass += ' path-neu';
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const d = `M ${x1} ${y1} Q ${(x1+x2)/2} ${Math.min(y1,y2)-40} ${x2} ${y2}`;
+        path.setAttribute('d', d);
+        path.setAttribute('class', colorClass);
+        path.oncontextmenu = (e) => { e.preventDefault(); removeConnection(idx); };
+        svg.appendChild(path);
+    }
+
+    function removeNut(nutId) {
+        if (!confirm('Delete wire nut and all its connections?')) return;
+        const nutNodeIdPart = `:nut-${nutId}`;
+        // Remove connections to the nut
+        STATE.connections = STATE.connections.filter(c => 
+            !c.source.includes(nutNodeIdPart) && !c.target.includes(nutNodeIdPart)
+        );
+        // Remove the nut itself
+        STATE.nuts = STATE.nuts.filter(n => n.id !== nutId);
+        renderModal();
+    }
+
+    function removeConnection(index) {
+        if (!confirm('Delete connection?')) return;
+        STATE.connections.splice(index, 1);
+        renderModal();
+    }
+
+    function simulate() {
+        // Reset power state
+        STATE.components.forEach(c => c.powered = false);
+        STATE.simHot.clear();
+        STATE.simNeu.clear();
+
+        // Find active breakers and trace power from them
+        const breakers = STATE.components.filter(c => c.type === 'breaker' && c.state);
+        breakers.forEach(b => {
+            b.powered = true;
+            traceNode(`${b.id}:term:hot`, STATE.simHot);
+            traceNode(`${b.id}:term:neutral`, STATE.simNeu);
+        });
+
+        // Update powered status of each component
+        STATE.components.forEach(c => {
+            if (c.type === 'bulb') {
+                if (hasPower(c.id, 'hot', STATE.simHot) && hasPower(c.id, 'neutral', STATE.simNeu)) {
+                    c.powered = true;
+                }
+            } else if (c.type === 'outlet') {
+                const h = hasPower(c.id, 'h1', STATE.simHot) || hasPower(c.id, 'h2', STATE.simHot);
+                const n = hasPower(c.id, 'n1', STATE.simNeu) || hasPower(c.id, 'n2', STATE.simNeu);
+                if (h && n) c.powered = true;
+            } else if (c.type.startsWith('switch')) {
+                const def = COMP_DEFS[c.type];
+                if (def.terminals.some(t => hasPower(c.id, t.id, STATE.simHot))) {
+                    c.powered = true;
+                }
+            }
+        });
+    }
     function hasPower(compId, termId, set) { return set.has(`${compId}:term:${termId}`); }
-    function traceNode(nodeId, set) { if(set.has(nodeId)) return; set.add(nodeId); STATE.connections.forEach(conn => { if(conn.source === nodeId) traceNode(conn.target, set); if(conn.target === nodeId) traceNode(conn.source, set); }); if(nodeId.includes('_src_') || nodeId.includes('_dst_')) { const sep = nodeId.includes('_src_') ? '_src_' : '_dst_'; const cabId = nodeId.split(sep)[0]; const isSrc = nodeId.includes('_src_'); const suffix = nodeId.split(sep)[1]; const otherEnd = `${cabId}_${isSrc?'dst':'src'}_${suffix}`; traceNode(otherEnd, set); } if(nodeId.includes(':nut-')) { if(nodeId.endsWith('_jumper')) { traceNode(nodeId.replace('_jumper',''), set); } else { traceNode(`${nodeId}_jumper`, set); } } if(nodeId.includes(':term:')) { const [compId, _, tName] = nodeId.split(':'); const c = STATE.components.find(x => x.id === compId); if(c) { if(c.type === 'switch' && c.state) { if(tName === 't1') traceNode(`${compId}:term:t2`, set); if(tName === 't2') traceNode(`${compId}:term:t1`, set); } if(c.type === 'outlet') { if(tName==='h1') traceNode(`${compId}:term:h2`, set); if(tName==='h2') traceNode(`${compId}:term:h1`, set); if(tName==='n1') traceNode(`${compId}:term:n2`, set); if(tName==='n2') traceNode(`${compId}:term:n1`, set); } if(c.type === 'switch3') { if(!c.state) { if(tName==='common') traceNode(`${compId}:term:trav1`, set); if(tName==='trav1') traceNode(`${compId}:term:common`, set); } else { if(tName==='common') traceNode(`${compId}:term:trav2`, set); if(tName==='trav2') traceNode(`${compId}:term:common`, set); } } } } }
+    function traceNode(nodeId, set) {
+        if (set.has(nodeId)) return;
+        set.add(nodeId);
+
+        // Follow direct connections
+        STATE.connections.forEach(conn => {
+            if (conn.source === nodeId) traceNode(conn.target, set);
+            if (conn.target === nodeId) traceNode(conn.source, set);
+        });
+
+        // Jump across cables
+        if (nodeId.includes('_src_') || nodeId.includes('_dst_')) {
+            const sep = nodeId.includes('_src_') ? '_src_' : '_dst_';
+            const [cabId, suffix] = nodeId.split(sep);
+            const isSrc = nodeId.includes('_src_');
+            const otherEnd = `${cabId}_${isSrc ? 'dst' : 'src'}_${suffix}`;
+            traceNode(otherEnd, set);
+        }
+
+        // Jump across wire nut jumpers
+        if (nodeId.includes(':nut-')) {
+            if (nodeId.endsWith('_jumper')) traceNode(nodeId.replace('_jumper', ''), set);
+            else traceNode(`${nodeId}_jumper`, set);
+        }
+
+        // Internal component logic (switches, outlets)
+        if (nodeId.includes(':term:')) {
+            const [compId, , tName] = nodeId.split(':');
+            const c = STATE.components.find(x => x.id === compId);
+            if (!c) return;
+            if (c.type === 'switch' && c.state) { if (tName === 't1') traceNode(`${compId}:term:t2`, set); if (tName === 't2') traceNode(`${compId}:term:t1`, set); }
+            if (c.type === 'outlet') { if (tName === 'h1') traceNode(`${compId}:term:h2`, set); if (tName === 'h2') traceNode(`${compId}:term:h1`, set); if (tName === 'n1') traceNode(`${compId}:term:n2`, set); if (tName === 'n2') traceNode(`${compId}:term:n1`, set); }
+            if (c.type === 'switch3') { if (!c.state) { if (tName === 'common') traceNode(`${compId}:term:trav1`, set); if (tName === 'trav1') traceNode(`${compId}:term:common`, set); } else { if (tName === 'common') traceNode(`${compId}:term:trav2`, set); if (tName === 'trav2') traceNode(`${compId}:term:common`, set); } }
+        }
+    }
 </script>
 </body>
 </html>
