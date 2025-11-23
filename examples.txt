@@ -1,0 +1,136 @@
+// WiringSim Configuration
+component c1: breaker at (100, 100)
+component c2: outlet at (347, 92)
+component c5: bulb at (1197, 82)
+component c10: switch3 at (679, 85)
+component c11: switch3 at (936, 206)
+component c18: switch at (669, 354)
+component c19: breaker at (101, 370)
+component c20: bulb at (383, 358)
+component c24: breaker at (103, 590)
+component c25: switch at (372, 590)
+component c26: outlet at (1025, 668)
+component c27: bulb at (1025, 461)
+
+cable cab-3: 14/2 from c1 to c2
+cable cab-12: 14/2 from c2 to c10
+cable cab-13: 14/3 from c10 to c11
+cable cab-17: 14/2 from c11 to c5
+cable cab-21: 14/2 from c19 to c20
+cable cab-22: 14/2 from c20 to c18
+cable cab-28: 14/2 from c24 to c25
+cable cab-29: 14/2 from c25 to c27
+cable cab-30: 14/2 from c25 to c26
+
+wiring c1 {
+  entry cab-3 at (655, 88)
+  connect cab-3:white to term:neutral
+  connect cab-3:black to term:hot
+  connect cab-3:copper to term:ground
+}
+
+wiring c2 {
+  entry cab-3 at (401, 97)
+  entry cab-12 at (875, 687)
+  connect cab-3:black to term:h1
+  connect cab-3:white to term:n1
+  connect term:g to cab-3:copper
+  connect cab-12:white to term:n2
+  connect cab-12:black to term:h2
+  connect cab-12:copper to term:g
+}
+
+wiring c5 {
+  entry cab-17 at (20, 300)
+  connect cab-17:black to term:hot
+  connect cab-17:white to term:neutral
+}
+
+wiring c10 {
+  nut n1 at (887, 677)
+  entry cab-12 at (304, 591)
+  entry cab-13 at (578, 40)
+  connect cab-12:black to term:common
+  connect cab-12:copper to term:g
+  connect cab-13:black to term:trav1
+  connect term:trav2 to cab-13:red
+  connect cab-13:copper to term:g
+  connect cab-13:white to n1
+  connect cab-12:white to n1
+}
+
+wiring c11 {
+  nut n1 at (991, 112)
+  entry cab-13 at (405, 101)
+  entry cab-17 at (872, 637)
+  connect cab-13:red to term:trav2
+  connect cab-13:black to term:trav1
+  connect cab-17:black to term:common
+  connect cab-17:copper to term:g
+  connect cab-13:copper to term:g
+  connect cab-13:white to n1
+  connect cab-17:white to n1
+}
+
+wiring c18 {
+  entry cab-22 at (571, 80)
+  connect cab-22:white to term:t2
+  connect cab-22:black to term:t1
+  connect cab-22:copper to term:g
+}
+
+wiring c19 {
+  entry cab-21 at (20, 20)
+  connect cab-21:black to term:hot
+  connect cab-21:white to term:neutral
+  connect cab-21:copper to term:ground
+}
+
+wiring c20 {
+  nut n1 at (649, 90)
+  entry cab-21 at (20, 300)
+  entry cab-22 at (1115, 128)
+  connect cab-21:white to term:neutral
+  connect cab-22:black to term:hot
+  connect cab-21:black to n1
+  connect cab-22:white to n1
+}
+
+wiring c24 {
+  entry cab-28 at (646, 72)
+  connect cab-28:black to term:hot
+  connect cab-28:white to term:neutral
+  connect cab-28:copper to term:ground
+}
+
+wiring c25 {
+  nut n1 at (675, 108)
+  nut n2 at (621, 725)
+  entry cab-28 at (20, 300)
+  entry cab-29 at (966, 96)
+  entry cab-30 at (1085, 699)
+  connect cab-29:black to term:t1
+  connect cab-30:copper to term:g
+  connect cab-28:copper to term:g
+  connect cab-29:copper to term:g
+  connect cab-30:black to n2
+  connect cab-28:black to n2
+  connect n2 to term:t2
+  connect cab-29:white to n1
+  connect cab-28:white to n1
+  connect cab-30:white to n1
+}
+
+wiring c26 {
+  entry cab-30 at (639, 656)
+  connect cab-30:black to term:h2
+  connect cab-30:white to term:n2
+  connect cab-30:copper to term:g
+}
+
+wiring c27 {
+  entry cab-29 at (639, 629)
+  connect cab-29:black to term:hot
+  connect term:neutral to cab-29:white
+}
+

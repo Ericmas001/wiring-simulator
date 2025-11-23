@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiringSim v21 - Visual Feedback Update</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --accent: #3b82f6;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --c-black: #171717;
+            --c-white: #f8fafc;
+            --c-red: #ef4444;
+            --c-ground: #b45309;
+            --c-nut: #f97316;
+        }
+        * { box-sizing: border-box; user-select: none; }
+        body { font-family: 'Segoe UI', monospace; background: var(--bg); color: var(--text); margin: 0; height: 100vh; display: flex; overflow: hidden; }
+
+        #main-view { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; min-width: 0; }
+        header { background: var(--panel); padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 15px; z-index: 20; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        .tool-group { display: flex; background: #0f172a; padding: 4px; border-radius: 6px; border: 1px solid var(--border); }
+        .tool-btn { background: transparent; color: #94a3b8; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; font-weight: 600; transition: all 0.2s; }
+        .tool-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        .tool-btn.active { background: var(--accent); color: white; }
+        .tool-btn.toggle-on { background: var(--success); color: white; }
+        .tool-btn.toggle-off { background: var(--panel); border: 1px solid var(--danger); color: var(--danger); }
+
+        #workspace { flex: 1; position: relative; background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 20px 20px; overflow: hidden; }
+        #cables-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 1; }
+        
+        #code-panel { width: 450px; background: #0f172a; border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 60; transition: width 0.3s ease, opacity 0.3s ease; opacity: 1; }
+        #code-panel.collapsed { width: 0; opacity: 0; border: none; pointer-events: none; }
+        #code-header { padding: 10px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        #code-content { flex: 1; background: #1e1e1e; color: #9cdcfe; border: none; resize: none; padding: 15px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.6; outline: none; white-space: pre; overflow: auto; user-select: text; }
+        .code-actions { padding: 10px; display: flex; gap: 10px; background: var(--panel); border-top: 1px solid var(--border); }
+        .action-btn { flex: 1; padding: 8px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; color: white; }
+        .btn-import { background: var(--success); }
+        .btn-export { background: var(--accent); }
+        .btn-toggle-panel { background: var(--panel); border: 1px solid var(--border); color: #94a3b8; }
+
+        #modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 50; display: none; justify-content: center; align-items: center; }
+        #wiring-editor { width: 95%; height: 95%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; position: relative; }
+        #editor-header { padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        #editor-canvas { flex: 1; position: relative; background: #1e293b; overflow: hidden; }
+        #connections-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
+        .device-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 260px; height: 340px; background: #cbd5e1; border: 8px solid #475569; border-radius: 4px; z-index: 2; box-shadow: inset 0 0 20px rgba(0,0,0,0.2); }
+
+        .component { position: absolute; width: 150px; background: var(--panel); border: 2px solid var(--border); border-radius: 8px; padding: 10px; z-index: 10; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.3); cursor: grab; }
+        .component:active { cursor: grabbing; border-color: var(--accent); }
+        .component.highlight { box-shadow: 0 0 0 3px var(--accent); }
+        .comp-header { display: flex; justify-content: space-between; font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px; }
+        .comp-icon { font-size: 2rem; text-align: center; margin: 5px 0; }
+        .comp-controls { display: flex; gap: 5px; margin-top: 5px; }
+        .comp-btn { flex: 1; background: #334155; border: 1px solid #475569; color: white; padding: 5px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; z-index: 20; }
+        .status-led { width: 100%; height: 4px; background: #334155; margin-top: 8px; border-radius: 2px; }
+        .status-led.on { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .btn-delete { color: var(--danger); cursor: pointer; font-weight: bold; padding: 0 5px; z-index: 20; }
+
+        .terminal { width: 24px; height: 24px; border-radius: 50%; border: 3px solid #333; position: absolute; cursor: pointer; z-index: 10; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); transition: transform 0.1s; }
+        .terminal:hover { transform: scale(1.2); }
+        .terminal.gold { background: radial-gradient(circle at 30%, #facc15, #854d0e); }
+        .terminal.silver { background: radial-gradient(circle at 30%, #f1f5f9, #64748b); }
+        .terminal.green { background: radial-gradient(circle at 30%, #4ade80, #14532d); }
+        .terminal.black { background: radial-gradient(circle at 30%, #334155, #0f172a); }
+
+        .cable-entry { position: absolute; background: #f1f5f9; padding: 4px; border-radius: 4px; width: 70px; text-align: center; border: 2px solid #64748b; z-index: 5; cursor: grab; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .cable-entry:active { cursor: grabbing; border-color: white; }
+        .cable-label { font-size: 9px; color: #333; font-weight: bold; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .wire-stub { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin: 0 3px; border: 1px solid rgba(0,0,0,0.3); cursor: pointer; transition: transform 0.1s; }
+        .wire-stub:hover { transform: scale(1.2); }
+        .wire-stub.selected { box-shadow: 0 0 0 3px var(--accent); z-index: 20; transform: scale(1.2); }
+        .w-b { background: var(--c-black); } .w-w { background: var(--c-white); } .w-r { background: var(--c-red); } .w-g { background: var(--c-ground); }
+
+        .wire-nut-group { position: absolute; z-index: 9; cursor: grab; display: flex; flex-direction: column; align-items: center; }
+        .wire-nut-cap { width: 32px; height: 36px; background: var(--c-nut); border-bottom: 4px solid #c2410c; border-radius: 4px 4px 16px 16px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.8); font-size: 10px; }
+        .wire-nut-cap.selected { box-shadow: 0 0 0 3px var(--accent); }
+        .nut-jumper-stub { width: 12px; height: 12px; background: #333; border-radius: 50%; margin-top: -6px; border: 1px solid #000; cursor: pointer; z-index: 10; }
+        .nut-jumper-stub.selected { box-shadow: 0 0 0 3px var(--accent); background: var(--accent); }
+
+        .is-hot { box-shadow: 0 0 10px 2px #ef4444 !important; border-color: #ef4444 !important; }
+        .is-neutral { box-shadow: 0 0 10px 2px #3b82f6 !important; border-color: #3b82f6 !important; }
+
+        path { fill: none; stroke-width: 4; transition: stroke 0.2s, filter 0.2s; pointer-events: stroke; cursor: alias; }
+        path:hover { stroke-width: 8; stroke: var(--danger) !important; filter: none !important; } 
+        
+        /* Main View Cable Styles */
+        .cable-path { fill: none; stroke: #475569; stroke-width: 6; cursor: pointer; transition: stroke 0.2s, filter 0.2s; pointer-events: auto; }
+        .cable-path:hover { stroke: #cbd5e1; }
+        /* New: Powered Cable Glow */
+        .cable-on { stroke: var(--success) !important; filter: drop-shadow(0 0 5px var(--success)); }
+
+        .path-b { stroke: var(--c-black); } .path-w { stroke: var(--c-white); } .path-r { stroke: var(--c-red); } .path-g { stroke: var(--c-ground); } .path-nut { stroke: #475569; stroke-dasharray: 5,5; }
+        .path-hot { filter: drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 2px #ef4444); }
+        .path-neu { filter: drop-shadow(0 0 3px #3b82f6) drop-shadow(0 0 2px #3b82f6); }
+    </style>
+</head>
+<body>
+
+<div id="main-view">
+    <header>
+        <h3 style="margin:0; margin-right:20px; color:white;">⚡ WiringSim v21</h3>
+        <div class="tool-group">
+            <button class="tool-btn active" id="btn-select" onclick="setTool('select')">✋ Select</button>
+            <button class="tool-btn" id="btn-14-2" onclick="setTool('14/2')">🔌 14/2</button>
+            <button class="tool-btn" id="btn-14-3" onclick="setTool('14/3')">🔌 14/3</button>
+        </div>
+        <div style="flex:1"></div>
+        <div class="tool-group">
+            <button class="tool-btn" onclick="addComp('breaker')">+ Breaker</button>
+            <button class="tool-btn" onclick="addComp('outlet')">+ Outlet</button>
+            <button class="tool-btn" onclick="addComp('switch')">+ Switch</button>
+            <button class="tool-btn" onclick="addComp('switch3')">+ 3-Way</button>
+            <button class="tool-btn" onclick="addComp('bulb')">+ Light</button>
+        </div>
+        <button class="action-btn btn-toggle-panel" onclick="togglePanel()">Code &lt;/&gt;</button>
+    </header>
+
+    <div id="workspace">
+        <svg id="cables-layer"></svg>
+    </div>
+
+    <div id="modal">
+        <div id="wiring-editor">
+            <div id="editor-header">
+                <h3 id="modal-title" style="margin:0; color: white;">Wiring</h3>
+                <div id="modal-toolbar" style="display:flex; gap:10px">
+                    <small style="color:#94a3b8; align-self:center; margin-right:10px;">Right-Click line/nut to delete</small>
+                    <button class="tool-btn" style="background:#334155" onclick="addNut()">+ Add Wire Nut</button>
+                    <button class="tool-btn" style="background:var(--accent); color:white" onclick="closeModal()">Done</button>
+                </div>
+            </div>
+            <div id="editor-canvas">
+                <svg id="connections-layer"></svg>
+                <div class="device-box" id="device-box">
+                    <div style="text-align:center; margin-top:140px; color:#64748b; font-weight:bold;">Device Front</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="code-panel" class="collapsed">
+    <div id="code-header">
+        <span>Circuit Code</span>
+        <button onclick="togglePanel()" style="background:none; border:none; color:#fff; cursor:pointer;">✕</button>
+    </div>
+    <textarea id="code-content" spellcheck="false"></textarea>
+    <div class="code-actions">
+        <button class="action-btn btn-export" onclick="exportState()">Update Text from GUI</button>
+        <button class="action-btn btn-import" onclick="importState()">Apply Code to GUI</button>
+    </div>
+</div>
+
+<script>
+    let STATE = {
+        components: [], cables: [], connections: [], nuts: [], tool: 'select', nextId: 1,
+        dragComp: null, dragOffset: {x:0,y:0}, isDragging: false,
+        pendingCableStart: null, activeCompId: null, dragItem: null, hasDraggedModal: false, selectedNode: null,
+        simHot: new Set(), simNeu: new Set() 
+    };
+
+    const COL_MAP = { 'b': 'black', 'w': 'white', 'r': 'red', 'g': 'copper' };
+    const REV_COL_MAP = { 'black': 'b', 'white': 'w', 'red': 'r', 'copper': 'g' };
+
+    const COMP_DEFS = {
+        breaker: { w: 140, h: 160, terminals: [ {id: 'hot', c: 'gold', x: 130, y: 260}, {id: 'neutral', c: 'silver', x: 180, y: 260}, {id: 'ground', c: 'green', x: 50, y: 260} ], type: 'Source' },
+        outlet: { w: 140, h: 160, terminals: [ {id: 'h1', c: 'gold', x: 210, y: 80}, {id: 'h2', c: 'gold', x: 210, y: 220}, {id: 'n1', c: 'silver', x: 10, y: 80}, {id: 'n2', c: 'silver', x: 10, y: 220}, {id: 'g', c: 'green', x: 10, y: 290} ] },
+        switch: { w: 140, h: 160, terminals: [ {id: 't1', c: 'gold', x: 210, y: 80}, {id: 't2', c: 'gold', x: 210, y: 220}, {id: 'g', c: 'green', x: 10, y: 290} ] },
+        switch3: { w: 140, h: 160, terminals: [ {id: 'common', c: 'black', x: 10, y: 220}, {id: 'trav1', c: 'gold', x: 210, y: 80}, {id: 'trav2', c: 'gold', x: 210, y: 220}, {id: 'g', c: 'green', x: 10, y: 290} ] },
+        bulb: { w: 140, h: 160, terminals: [ {id: 'hot', c: 'gold', x: 130, y: 170}, {id: 'neutral', c: 'silver', x: 90, y: 170} ] }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const ws = document.getElementById('workspace');
+        ws.addEventListener('mousemove', handleWsMove);
+        ws.addEventListener('mouseup', handleWsUp);
+        const editor = document.getElementById('editor-canvas');
+        editor.addEventListener('mousemove', handleModalDrag);
+        editor.addEventListener('mouseup', endModalDrag);
+        addComp('breaker');
+        addComp('outlet');
+    });
+
+    // --- EXPORT LOGIC ---
+
+    function getCompIdForNode(nodeId) {
+        if(nodeId.includes(':term:')) return nodeId.split(':')[0];
+        if(nodeId.startsWith('nut-') || nodeId.includes(':nut-')) {
+            let raw = nodeId.includes(':') ? nodeId.split(':')[1] : nodeId;
+            let idNum = parseInt(raw.replace('nut-','').replace('_jumper',''));
+            let nut = STATE.nuts.find(n => n.id === idNum);
+            return nut ? nut.compId : null;
+        }
+        if(nodeId.includes('_src_') || nodeId.includes('_dst_')) {
+            const sep = nodeId.includes('_src_') ? '_src_' : '_dst_';
+            const cabId = nodeId.split(sep)[0];
+            const isSrc = nodeId.includes('_src_');
+            const cab = STATE.cables.find(c => c.id === cabId);
+            return cab ? (isSrc ? cab.from : cab.to) : null;
+        }
+        return null;
+    }
+
+    function exportState() {
+        let txt = `// WiringSim Configuration\n`;
+        STATE.components.forEach(c => { txt += `component ${c.id}: ${c.type} at (${Math.round(c.x)}, ${Math.round(c.y)})\n`; });
+        txt += `\n`;
+        STATE.cables.forEach(c => { txt += `cable ${c.id}: ${c.type} from ${c.from} to ${c.to}\n`; });
+        txt += `\n`;
+
+        STATE.components.forEach(c => {
+            const nuts = STATE.nuts.filter(n => n.compId === c.id);
+            const entries = STATE.cables.filter(cab => cab.from === c.id || cab.to === c.id);
+            
+            const conns = STATE.connections.filter(conn => {
+                const sOwner = getCompIdForNode(conn.source);
+                const tOwner = getCompIdForNode(conn.target);
+                return sOwner === c.id || tOwner === c.id;
+            });
+
+            if(nuts.length > 0 || conns.length > 0 || entries.length > 0) {
+                txt += `wiring ${c.id} {\n`;
+                
+                const nutAliasMap = {};
+                nuts.forEach((n, i) => {
+                    const alias = `n${i+1}`;
+                    nutAliasMap[`nut-${n.id}`] = alias;
+                    txt += `  nut ${alias} at (${Math.round(n.x)}, ${Math.round(n.y)})\n`;
+                });
+
+                entries.forEach(cab => {
+                    const isSrc = cab.from === c.id;
+                    const pos = isSrc ? cab.meta.srcPos : cab.meta.dstPos;
+                    txt += `  entry ${cab.id} at (${Math.round(pos.x)}, ${Math.round(pos.y)})\n`;
+                });
+
+                const toDsl = (id) => {
+                    let clean = id.includes(':') && !id.startsWith('term:') ? id.split(':')[1] : id;
+                    if(id.includes(':term:')) return `term:${id.split(':term:')[1]}`;
+                    if(clean.startsWith('nut-')) {
+                        let base = clean.replace('_jumper', '');
+                        return nutAliasMap[base] || 'unknown';
+                    }
+                    if(id.includes('_src_') || id.includes('_dst_')) {
+                        const sep = id.includes('_src_') ? '_src_' : '_dst_';
+                        const parts = id.split(sep);
+                        return `${parts[0]}:${COL_MAP[parts[1]]}`;
+                    }
+                    return id;
+                };
+
+                conns.forEach(conn => {
+                    txt += `  connect ${toDsl(conn.source)} to ${toDsl(conn.target)}\n`;
+                });
+                txt += `}\n\n`;
+            }
+        });
+        document.getElementById('code-content').value = txt;
+    }
+
+    function importState() {
+        const text = document.getElementById('code-content').value;
+        const lines = text.split('\n');
+        STATE.components = []; STATE.cables = []; STATE.connections = []; STATE.nuts = [];
+        STATE.nextId = 1; STATE.simHot.clear(); STATE.simNeu.clear();
+        
+        let currentScope = null;
+        let localNutMap = {};
+
+        try {
+            lines.forEach(line => {
+                line = line.trim(); if(!line || line.startsWith('//')) return;
+                let m = line.match(/^component\s+(\S+):\s+(\S+)\s+at\s+\((-?\d+),\s*(-?\d+)\)/);
+                if(m) { STATE.components.push({ id: m[1], type: m[2], x: parseInt(m[3]), y: parseInt(m[4]), state: false, powered: false }); updateNextId(m[1]); return; }
+                m = line.match(/^cable\s+(\S+):\s+(\S+)\s+from\s+(\S+)\s+to\s+(\S+)/);
+                if(m) { STATE.cables.push({ id: m[1], type: m[2], from: m[3], to: m[4], meta: { srcPos: {x:20,y:20}, dstPos: {x:20,y:300} } }); updateNextId(m[1]); return; }
+            });
+
+            lines.forEach(line => {
+                line = line.trim(); if(!line || line.startsWith('//')) return;
+                let m = line.match(/^wiring\s+(\S+)\s+{/);
+                if(m) { currentScope = m[1]; localNutMap = {}; return; }
+                if(line === '}') { currentScope = null; return; }
+
+                if(currentScope) {
+                    m = line.match(/^nut\s+(n\d+)\s+at\s+\((-?\d+),\s*(-?\d+)\)/);
+                    if(m) {
+                        const newId = STATE.nextId++;
+                        STATE.nuts.push({ id: newId, compId: currentScope, x: parseInt(m[2]), y: parseInt(m[3]) });
+                        localNutMap[m[1]] = `nut-${newId}`; return;
+                    }
+                    m = line.match(/^entry\s+(\S+)\s+at\s+\((-?\d+),\s*(-?\d+)\)/);
+                    if(m) {
+                        const cab = STATE.cables.find(c => c.id === m[1]);
+                        if(cab) {
+                            if(cab.from === currentScope) cab.meta.srcPos = {x: parseInt(m[2]), y: parseInt(m[3])};
+                            else if(cab.to === currentScope) cab.meta.dstPos = {x: parseInt(m[2]), y: parseInt(m[3])};
+                        }
+                        return;
+                    }
+                    m = line.match(/^connect\s+(\S+)\s+to\s+(\S+)/);
+                    if(m) {
+                        const resolve = (dsl) => {
+                            if(dsl.startsWith('term:')) return `${currentScope}:${dsl}`;
+                            if(dsl.startsWith('n') && localNutMap[dsl]) return `${currentScope}:${localNutMap[dsl]}`;
+                            if(dsl.includes(':')) {
+                                const [cid, cname] = dsl.split(':');
+                                const cab = STATE.cables.find(c => c.id === cid);
+                                if(!cab) return null;
+                                const code = REV_COL_MAP[cname];
+                                if(cab.from === currentScope) return `${cid}_src_${code}`;
+                                if(cab.to === currentScope) return `${cid}_dst_${code}`;
+                            }
+                            return null;
+                        };
+
+                        let s = resolve(m[1]);
+                        let t = resolve(m[2]);
+
+                        if(s && t) {
+                            const sIsNut = s.includes(':nut-');
+                            const tIsNut = t.includes(':nut-');
+                            const sIsTerm = s.includes(':term:');
+                            const tIsTerm = t.includes(':term:');
+
+                            if(sIsNut && tIsTerm) s += '_jumper';
+                            if(tIsNut && sIsTerm) t += '_jumper';
+                            
+                            STATE.connections.push({ source: s, target: t });
+                        }
+                    }
+                }
+            });
+            renderWorkspace();
+            if(STATE.activeCompId) renderModal();
+        } catch(e) { alert("Import Error: " + e); }
+    }
+
+    function updateNextId(str) { const num = parseInt(str.replace(/\D/g, '')); if(!isNaN(num) && num >= STATE.nextId) STATE.nextId = num + 1; }
+
+    // --- UI & LOGIC ---
+    window.togglePanel = function() { document.getElementById('code-panel').classList.toggle('collapsed'); if(!document.getElementById('code-panel').classList.contains('collapsed')) exportState(); };
+    window.setTool = function(t) { STATE.tool = t; STATE.pendingCableStart = null; document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); if(t==='select') document.getElementById('btn-select').classList.add('active'); if(t.startsWith('14')) document.getElementById('btn-'+t.replace('/','-')).classList.add('active'); renderWorkspace(); };
+    window.addComp = function(type) { const id = 'c' + STATE.nextId++; STATE.components.push({ id, type, x: 100, y: 100 + (STATE.components.length * 40), state: false, powered: false }); renderWorkspace(); };
+    window.removeComp = function(id) { if(!confirm('Delete component?')) return; STATE.cables = STATE.cables.filter(c => { if(c.from === id || c.to === id) { STATE.connections = STATE.connections.filter(conn => !conn.source.startsWith(c.id) && !conn.target.startsWith(c.id)); return false; } return true; }); STATE.nuts = STATE.nuts.filter(n => n.compId !== id); const termPrefix = `${id}:term:`; STATE.connections = STATE.connections.filter(conn => !conn.source.startsWith(termPrefix) && !conn.target.startsWith(termPrefix)); STATE.components = STATE.components.filter(c => c.id !== id); renderWorkspace(); };
+    window.handleWsClick = function(e, id) { if(e.target.closest('button') || e.target.classList.contains('btn-delete')) return; if(STATE.tool === 'select') return; if(STATE.tool.startsWith('14')) { if(!STATE.pendingCableStart) { STATE.pendingCableStart = id; renderWorkspace(); } else if(STATE.pendingCableStart !== id) { const cid = 'cab-' + STATE.nextId++; STATE.cables.push({ id: cid, from: STATE.pendingCableStart, to: id, type: STATE.tool, meta: { srcPos: {x: 20, y: 20}, dstPos: {x: 20, y: 300} } }); STATE.pendingCableStart = null; setTool('select'); } } };
+    window.startWsDrag = function(e, id) { if(e.target.closest('button') || e.target.classList.contains('btn-delete')) return; if(STATE.tool !== 'select') return; STATE.dragComp = id; STATE.isDragging = false; const c = STATE.components.find(x => x.id === id); if(c) STATE.dragOffset = { x: e.clientX - c.x, y: e.clientY - c.y }; };
+    window.handleWsMove = function(e) { if(STATE.dragComp) { STATE.isDragging = true; const c = STATE.components.find(x => x.id === STATE.dragComp); if(c) { c.x = e.clientX - STATE.dragOffset.x; c.y = e.clientY - STATE.dragOffset.y; const el = document.getElementById('comp-'+c.id); if(el) { el.style.left = c.x + 'px'; el.style.top = c.y + 'px'; } renderCables(); } } };
+    window.handleWsUp = function(e) { if(STATE.dragComp && STATE.isDragging) { STATE.dragComp = null; renderWorkspace(); } else { STATE.dragComp = null; } };
+
+    function renderWorkspace() { try { simulate(); } catch(e) { console.error(e); } const ws = document.getElementById('workspace'); document.querySelectorAll('.component').forEach(e => e.remove()); STATE.components.forEach(c => { const el = document.createElement('div'); el.className = 'component'; el.id = 'comp-' + c.id; el.style.left = c.x + 'px'; el.style.top = c.y + 'px'; if(STATE.pendingCableStart === c.id) el.classList.add('highlight'); el.innerHTML = `<div class="comp-header"><span>${c.id.toUpperCase()}</span><span class="btn-delete" onmousedown="event.stopPropagation()" onclick="event.stopPropagation(); window.removeComp('${c.id}')">✕</span></div><div class="comp-icon">${getIcon(c)}</div><div style="text-align:center; font-size:11px; color:#64748b">${c.type}</div><div class="comp-controls">${getControls(c)}<button class="comp-btn" onmousedown="event.stopPropagation()" onclick="event.stopPropagation(); window.openModal('${c.id}')">Wire 🔌</button></div><div class="status-led ${c.powered ? 'on' : ''}"></div>`; el.onmousedown = (e) => window.startWsDrag(e, c.id); el.onclick = (e) => window.handleWsClick(e, c.id); ws.appendChild(el); }); renderCables(); }
+    
+    function renderCables() { 
+        const svg = document.getElementById('cables-layer'); svg.innerHTML = ''; 
+        STATE.cables.forEach(cab => { 
+            const c1 = STATE.components.find(c => c.id === cab.from); 
+            const c2 = STATE.components.find(c => c.id === cab.to); 
+            if(!c1 || !c2) return; 
+            const x1 = c1.x + 75, y1 = c1.y + 80; const x2 = c2.x + 75, y2 = c2.y + 80; 
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); 
+            const d = `M ${x1} ${y1} C ${x1} ${y1+100}, ${x2} ${y2+100}, ${x2} ${y2}`; 
+            path.setAttribute('d', d); 
+            
+            // ADDED: Check for HOT wire inside this cable to apply glow
+            let isPowered = false;
+            ['b', 'r'].forEach(col => {
+                if (STATE.simHot.has(`${cab.id}_src_${col}`) || STATE.simHot.has(`${cab.id}_dst_${col}`)) isPowered = true;
+            });
+            
+            path.setAttribute('class', `cable-path ${isPowered ? 'cable-on' : ''}`); 
+            path.oncontextmenu = (e) => { e.preventDefault(); if(confirm('Remove cable?')) { STATE.cables = STATE.cables.filter(x=>x.id!==cab.id); renderWorkspace(); }}; 
+            svg.appendChild(path); 
+        }); 
+    }
+
+    function getIcon(c) { if(c.type === 'bulb') return c.powered ? '💡' : '⚫'; if(c.type.startsWith('switch')) return '⇅'; if(c.type === 'breaker') return '⚡'; return '🔌'; }
+    function getControls(c) { if(c.type === 'breaker' || c.type.startsWith('switch')) { return `<button class="comp-btn ${c.state ? 'active' : ''}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation(); window.toggleComp('${c.id}')">${c.state ? 'ON' : 'OFF'}</button>`; } return ''; }
+    
+    window.toggleComp = function(id) { const c = STATE.components.find(x => x.id === id); if(c) { c.state = !c.state; if(STATE.activeCompId) { simulate(); renderModal(); } renderWorkspace(); } };
+    window.openModal = function(id) { STATE.activeCompId = id; document.getElementById('modal').style.display = 'flex'; renderModal(); };
+    window.closeModal = function() { document.getElementById('modal').style.display = 'none'; STATE.activeCompId = null; STATE.selectedNode = null; renderWorkspace(); };
+    window.addNut = function() { const rx = 280 + (Math.random() * 40 - 20); const ry = 50 + (Math.random() * 40 - 20); STATE.nuts.push({ id: STATE.nextId++, compId: STATE.activeCompId, x: rx, y: ry }); renderModal(); };
+    window.exportState = exportState; window.importState = importState;
+
+    function renderModal() {
+        try { simulate(); } catch(e) { console.error(e); }
+        const box = document.getElementById('device-box'); const wiringCanvas = document.getElementById('editor-canvas'); const svg = document.getElementById('connections-layer'); const tb = document.getElementById('modal-toolbar'); const comp = STATE.components.find(c => c.id === STATE.activeCompId);
+        svg.innerHTML = ''; box.innerHTML = '<div style="text-align:center; margin-top:140px; color:#64748b; font-weight:bold;">Device Front</div>'; 
+        document.querySelectorAll('.dynamic-item').forEach(e => e.remove());
+        const oldToggle = document.getElementById('dynamic-toggle-btn'); if(oldToggle) oldToggle.remove();
+        if(comp.type === 'breaker' || comp.type.startsWith('switch')) { const btn = document.createElement('button'); btn.id = 'dynamic-toggle-btn'; btn.className = `tool-btn ${comp.state ? 'toggle-on' : 'toggle-off'}`; btn.innerText = comp.state ? "TURN OFF" : "TURN ON"; btn.onclick = () => window.toggleComp(comp.id); tb.insertBefore(btn, tb.firstChild); }
+        COMP_DEFS[comp.type].terminals.forEach(t => { const term = document.createElement('div'); term.className = `terminal ${t.c}`; const fullId = `${comp.id}:term:${t.id}`; if(STATE.simHot.has(fullId)) term.classList.add('is-hot'); if(STATE.simNeu.has(fullId)) term.classList.add('is-neutral'); term.style.left = t.x + 'px'; term.style.top = t.y + 'px'; term.dataset.id = fullId; term.onclick = (e) => handleWiringClick(e, fullId); box.appendChild(term); });
+        const cables = STATE.cables.filter(c => c.from === STATE.activeCompId || c.to === STATE.activeCompId);
+        cables.forEach(cab => {
+            const isSrc = cab.from === STATE.activeCompId; const otherComp = STATE.components.find(c => c.id === (isSrc ? cab.to : cab.from)); if(!otherComp) return;
+            const pos = isSrc ? cab.meta.srcPos : cab.meta.dstPos; const group = document.createElement('div'); group.className = 'cable-entry dynamic-item'; group.style.left = pos.x + 'px'; group.style.top = pos.y + 'px'; group.innerHTML = `<div class="cable-label">From: ${otherComp.type}</div>`; group.onmousedown = (e) => startModalDrag(e, 'cable', cab.id, isSrc);
+            const wires = ['b', 'w', 'g']; if(cab.type === '14/3') wires.splice(2, 0, 'r');
+            wires.forEach(col => { const wId = `${cab.id}_${isSrc?'src':'dst'}_${col}`; const stub = document.createElement('div'); stub.className = `wire-stub w-${col}`; stub.dataset.id = wId; if(STATE.simHot.has(wId)) stub.classList.add('is-hot'); if(STATE.simNeu.has(wId)) stub.classList.add('is-neutral'); if(STATE.selectedNode === wId) stub.classList.add('selected'); stub.onclick = (e) => handleWiringClick(e, wId); group.appendChild(stub); }); wiringCanvas.appendChild(group);
+        });
+        STATE.nuts.filter(n => n.compId === STATE.activeCompId).forEach(nut => {
+            const group = document.createElement('div'); group.className = 'wire-nut-group dynamic-item'; group.style.left = nut.x + 'px'; group.style.top = nut.y + 'px'; group.onmousedown = (e) => startModalDrag(e, 'nut', nut.id); group.oncontextmenu = (e) => { e.preventDefault(); removeNut(nut.id); };
+            const nutKey = `${comp.id}:nut-${nut.id}`; const cap = document.createElement('div'); cap.className = 'wire-nut-cap'; cap.innerText = 'Nut'; cap.dataset.id = nutKey; if(STATE.simHot.has(nutKey)) cap.classList.add('is-hot'); if(STATE.simNeu.has(nutKey)) cap.classList.add('is-neutral'); if(STATE.selectedNode === nutKey) cap.classList.add('selected'); cap.onclick = (e) => handleWiringClick(e, nutKey);
+            const jump = document.createElement('div'); jump.className = 'nut-jumper-stub'; jump.title = "Jumper to Device"; const jumpKey = nutKey + '_jumper'; jump.dataset.id = jumpKey; if(STATE.simHot.has(jumpKey)) jump.classList.add('is-hot'); if(STATE.simNeu.has(jumpKey)) jump.classList.add('is-neutral'); if(STATE.selectedNode === jumpKey) jump.classList.add('selected'); jump.onclick = (e) => handleWiringClick(e, jumpKey); group.appendChild(cap); group.appendChild(jump); wiringCanvas.appendChild(group);
+        });
+        setTimeout(drawAllConnections, 0);
+    }
+
+    function handleWiringClick(e, id) { e.stopPropagation(); if(STATE.hasDraggedModal) return; if(!STATE.selectedNode) { STATE.selectedNode = id; } else if(STATE.selectedNode === id) { STATE.selectedNode = null; } else { const source = STATE.selectedNode; const target = id; if(source === target) return; const existingIdx = STATE.connections.findIndex(c => (c.source === source && c.target === target) || (c.source === target && c.target === source)); if(existingIdx > -1) { STATE.connections.splice(existingIdx, 1); } else { STATE.connections.push({ source, target }); } STATE.selectedNode = null; } renderModal(); }
+    function startModalDrag(e, type, id, isSrc) { const r = e.target.closest('.dynamic-item').getBoundingClientRect(); STATE.dragItem = { type, id, isSrc, offsetX: e.clientX - r.left, offsetY: e.clientY - r.top }; STATE.hasDraggedModal = false; }
+    function handleModalDrag(e) { if(!STATE.dragItem) return; STATE.hasDraggedModal = true; const r = document.getElementById('editor-canvas').getBoundingClientRect(); const x = e.clientX - r.left - STATE.dragItem.offsetX; const y = e.clientY - r.top - STATE.dragItem.offsetY; const { type, id, isSrc } = STATE.dragItem; if(type === 'cable') { const c = STATE.cables.find(x => x.id === id); if(c) { if(isSrc) c.meta.srcPos = {x,y}; else c.meta.dstPos = {x,y}; } } else if(type === 'nut') { const n = STATE.nuts.find(x => x.id === id); if(n) { n.x = x; n.y = y; } } renderModal(); }
+    function endModalDrag() { STATE.dragItem = null; setTimeout(() => { STATE.hasDraggedModal = false; }, 50); }
+    function drawAllConnections() { STATE.connections.forEach((conn, idx) => { const el1 = document.querySelector(`[data-id="${conn.source}"]`); const el2 = document.querySelector(`[data-id="${conn.target}"]`); if(el1 && el2) drawLine(el1, el2, idx, conn.source); }); }
+    function drawLine(el1, el2, idx, srcId) { const svg = document.getElementById('connections-layer'); const r = document.getElementById('editor-canvas').getBoundingClientRect(); const r1 = el1.getBoundingClientRect(); const r2 = el2.getBoundingClientRect(); if(r1.width===0 || r2.width===0) return; const x1 = r1.left + r1.width/2 - r.left; const y1 = r1.top + r1.height/2 - r.top; const x2 = r2.left + r2.width/2 - r.left; const y2 = r2.top + r2.height/2 - r.top; let colorClass = 'path-nut'; const idStr = el1.dataset.id + el2.dataset.id; if(idStr.includes('_b')) colorClass = 'path-b'; else if(idStr.includes('_w')) colorClass = 'path-w'; else if(idStr.includes('_r')) colorClass = 'path-r'; else if(idStr.includes('_g')) colorClass = 'path-g'; if(STATE.simHot.has(srcId)) colorClass += ' path-hot'; else if(STATE.simNeu.has(srcId)) colorClass += ' path-neu'; const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); const d = `M ${x1} ${y1} Q ${(x1+x2)/2} ${Math.min(y1,y2)-40} ${x2} ${y2}`; path.setAttribute('d', d); path.setAttribute('class', colorClass); path.oncontextmenu = (e) => { e.preventDefault(); removeConnection(idx); }; svg.appendChild(path); }
+
+    function simulate() { STATE.components.forEach(c => c.powered = false); STATE.simHot.clear(); STATE.simNeu.clear(); const breakers = STATE.components.filter(c => c.type === 'breaker' && c.state); breakers.forEach(b => { b.powered = true; traceNode(`${b.id}:term:hot`, STATE.simHot); traceNode(`${b.id}:term:neutral`, STATE.simNeu); }); STATE.components.forEach(c => { if(c.type === 'bulb') { if(hasPower(c.id, 'hot', STATE.simHot) && hasPower(c.id, 'neutral', STATE.simNeu)) c.powered = true; } else if(c.type === 'outlet') { const h = hasPower(c.id, 'h1', STATE.simHot) || hasPower(c.id, 'h2', STATE.simHot); const n = hasPower(c.id, 'n1', STATE.simNeu) || hasPower(c.id, 'n2', STATE.simNeu); if(h && n) c.powered = true; } else if(c.type.startsWith('switch')) { const def = COMP_DEFS[c.type]; if(def.terminals.some(t => hasPower(c.id, t.id, STATE.simHot))) c.powered = true; } }); }
+    function hasPower(compId, termId, set) { return set.has(`${compId}:term:${termId}`); }
+    function traceNode(nodeId, set) { if(set.has(nodeId)) return; set.add(nodeId); STATE.connections.forEach(conn => { if(conn.source === nodeId) traceNode(conn.target, set); if(conn.target === nodeId) traceNode(conn.source, set); }); if(nodeId.includes('_src_') || nodeId.includes('_dst_')) { const sep = nodeId.includes('_src_') ? '_src_' : '_dst_'; const cabId = nodeId.split(sep)[0]; const isSrc = nodeId.includes('_src_'); const suffix = nodeId.split(sep)[1]; const otherEnd = `${cabId}_${isSrc?'dst':'src'}_${suffix}`; traceNode(otherEnd, set); } if(nodeId.includes(':nut-')) { if(nodeId.endsWith('_jumper')) { traceNode(nodeId.replace('_jumper',''), set); } else { traceNode(`${nodeId}_jumper`, set); } } if(nodeId.includes(':term:')) { const [compId, _, tName] = nodeId.split(':'); const c = STATE.components.find(x => x.id === compId); if(c) { if(c.type === 'switch' && c.state) { if(tName === 't1') traceNode(`${compId}:term:t2`, set); if(tName === 't2') traceNode(`${compId}:term:t1`, set); } if(c.type === 'outlet') { if(tName==='h1') traceNode(`${compId}:term:h2`, set); if(tName==='h2') traceNode(`${compId}:term:h1`, set); if(tName==='n1') traceNode(`${compId}:term:n2`, set); if(tName==='n2') traceNode(`${compId}:term:n1`, set); } if(c.type === 'switch3') { if(!c.state) { if(tName==='common') traceNode(`${compId}:term:trav1`, set); if(tName==='trav1') traceNode(`${compId}:term:common`, set); } else { if(tName==='common') traceNode(`${compId}:term:trav2`, set); if(tName==='trav2') traceNode(`${compId}:term:common`, set); } } } } }
+</script>
+</body>
+</html>
